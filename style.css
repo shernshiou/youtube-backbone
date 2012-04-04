@@ -1,0 +1,15 @@
+div#bar{
+	padding-top: 20px;
+}
+
+div.card:hover{
+	background-color: #eee;
+	cursor: pointer;
+}
+
+	div.desc p{
+		font: 85% "Lucida Grande", "Trebuchet MS", Verdana, sans-serif;
+	}
+object{
+	z-index: -1;
+}
