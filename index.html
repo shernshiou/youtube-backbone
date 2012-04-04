@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en-US">
+
+<head>
+  <title>Page Title</title>
+  <link rel="stylesheet" type="text/css" href="lib/bootstrap/css/bootstrap.min.css" />
+  <link rel="stylesheet" type="text/css" href="style.css">
+  <script type="text/javascript" src="lib/jquery-1.7.2.min.js"></script>
+  <script type="text/javascript" src="lib/underscore-min.js"></script>
+  <script type="text/javascript" src="lib/backbone-min.js"></script>
+  <script type="text/javascript" src="http://www.google.com/jsapi"></script>
+  <script type="text/javascript">google.load("swfobject", "2.1");</script>  
+  <script type="text/javascript">
+  $(function(){
+    //Model
+    var Utube = Backbone.Model.extend({
+      defaults: {
+        thumbnail: '',
+        title: '',
+        desc: '',
+        author: '',
+        view: 0,
+        url: ''
+      },
+      initialize: function(){
+        this.bind("change:desc", function(){
+          var description = this.get("desc");
+          if(this.get("desc").length > 200)
+          {
+            description = description.slice(0, 200 - 5)+ "...";
+            this.set({ desc: description });
+          }
+        });
+      },
+      getView: function(){
+        return "Views: " + this.get('view');
+      }
+    });
+
+    //Collections
+    var UtubeArr = Backbone.Collection.extend({
+      model: Utube
+    });
+
+    var items = new UtubeArr();
+    var params = { allowScriptAccess: "always" };
+
+    //Controller
+    var AppRouter = Backbone.Router.extend({
+      routes: {
+          "search/:query": "defaultRoute",
+          "search/:query/:card": "cardView"
+      },
+      defaultRoute: function( query ){
+        history = query;
+        // The variable passed in matches the variable in the route definition "actions"
+        $('#bar').html("");
+        $.getJSON('https://gdata.youtube.com/feeds/api/videos?alt=json&max-results=10&q=' + encodeURIComponent(query), function(data){
+          items.reset();
+          $.each(data.feed.entry, function(key, val) {
+            var temp = new Utube({
+              thumbnail: val.media$group.media$thumbnail[0].url,
+              title: val.media$group.media$title.$t,
+              url: val.media$group.media$content[0].url,
+              author: val.author.name,
+              view: parseInt(val.yt$statistics.viewCount)
+            });
+            temp.set('desc', val.media$group.media$description.$t);
+            items.push(temp);
+            new UtubeCard({model: temp, key: items.length - 1});
+          });
+        });
+      },
+      cardView: function( query, card )
+      {
+        if(history != query)
+        {
+          history = query;
+          // The variable passed in matches the variable in the route definition "actions"
+          $('#bar').html("");
+          $.getJSON('https://gdata.youtube.com/feeds/api/videos?alt=json&max-results=10&q=' + encodeURIComponent(query), function(data){
+            items.reset();
+            $.each(data.feed.entry, function(key, val) {
+              var temp = new Utube({
+                thumbnail: val.media$group.media$thumbnail[0].url,
+                title: val.media$group.media$title.$t,
+                url: val.media$group.media$content[0].url,
+                author: val.author.name,
+                view: parseInt(val.yt$statistics.viewCount)
+              });
+              temp.set('desc', val.media$group.media$description.$t);
+              items.push(temp);
+              tempcard = new UtubeCard({model: temp, key: items.length - 1});
+              if(items.length -1 == card)
+              {
+                tempcard.$el.children(":first-child").hide().next().show();
+              }else{
+                tempcard.$el.hide();
+              }
+            });
+          });  
+        }else{
+          $(".card").each(function(key, value){
+            if(key != card)
+              $(this).hide();
+          });
+        }
+      }
+    });
+
+    //View
+    var AppView = Backbone.View.extend({
+      el: '.container',
+      initialize: function(){
+        this.bar = this.$("#bar");
+        this.render();
+      },
+      render: function(){
+      },
+      events:{
+        "keyup": 'keypressBack'
+      },
+      keypressBack: function(event){
+        console.log("Keypress");
+      }
+    });
+
+    var UtubeCard = Backbone.View.extend({
+      model: Utube,
+      className: 'span6 card row well',
+      initialize: function(key){
+        //console.log(items.length - 1);
+        this.key = key;
+        this.render();
+      },
+      render: function(){
+        var variables = {
+          thumbnail_label: this.model.get('thumbnail'),
+          title_label: this.model.get('title'),
+          author_label: this.model.get('author'),
+          desc_label: this.model.get('desc'),
+          view_label: this.model.getView(),
+          utube_key: this.key.key
+        };
+        var template = _.template($("#card_template").html(), variables);
+        this.$el
+          .attr("id", "card" + this.key.key)
+          .html(template);
+        $("#bar").append(this.el);
+        swfobject.embedSWF(this.model.get('url') 
+              + "?version=3&enablejsapi=1&playerapiid=player1",
+                "utube" + this.key.key, "460", "300", "9", null, null, params, "utube" + this.key.key);
+      },
+      events: {
+        "click .non-utube": 'animateCard'
+      },
+      animateCard: function(event){
+        this.$el.children(':first-child')
+          .slideUp()
+          .next().slideDown(function(){
+            app_router.navigate(Backbone.history.fragment + "/" + event.delegateTarget.id.replace("card",""), {trigger: true});
+          });
+      }
+    });
+
+    // Initiate the router
+    app_router = new AppRouter;
+    app_view = new AppView;
+    history = "";
+    // Start Backbone history a neccesary step for bookmarkable URL's
+    Backbone.history.start();
+  });
+  </script>
+  <script type="text/template" id="card_template">
+      <div id="card" class="non-utube row">
+        <div class="span2 thumbnail" style="background-image: url(<%= thumbnail_label %>); background-attachment: initial; background-origin: initial; background-clip: initial; background-color: initial; background-size: 156px 110px; height: 100px; background-position: initial initial; background-repeat: no-repeat no-repeat; ">
+        </div>
+        <div class="span3 desc">
+          <h5><%= title_label %></h5>
+          <p><%= author_label %></p>
+          <p><%= desc_label %></p>
+          <p><%= view_label %></p>
+        </div>
+      </div>
+      <div class="utube" style="display: none; ">
+        <div id="utube<%=utube_key%>" class="row" />
+      </div>
+  </script>
+</head>
+<body>
+  <div class="container">
+    <div id="bar" />
+  </div>
+</body>
+</html>
